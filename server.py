@@ -15,6 +15,8 @@ from json import loads, dumps
 #Address + Port no
 #Server would be running on the same host as Client
 # change this port number if required
+
+# TODO: Change this to dynamic
 serverPort = 12040
 
 serverSocket = socket(AF_INET, SOCK_STREAM)
