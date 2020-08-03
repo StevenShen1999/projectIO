@@ -21,6 +21,7 @@ password = input("Password: ")
 
 initial_payload = {"operation": "login", "username": username, "password": password}
 clientSocket.send(dumps(initial_payload).encode('utf-8'))
+valid_commands = {"Download_tempID", "logout", "Upload_contact_log"}
 
 # TODO: With time, refactor these error message codes and statuses into integers
 while(1):
@@ -47,9 +48,33 @@ while(1):
     elif (message['status'] == "logged_in"):
         print("Welcome to the BlueTrace Simulator!")
         # TODO: Change this to allow sending additional payloads once we get the other features online
+    elif (message['status'] == "logged_out"):
         break
-    else:
-        break
+    elif (message['status'] == "success"):
+        if ('id' in message):
+            print(f"TempID: {message['id']}")
+
+    command = input("")
+    while (command not in valid_commands):
+        print("Error. Invalid command")
+        command = input("")
+
+    local_payload = {"operation": command}
+
+    if (command == "Upload_contact_log"):
+        # TODO: Change this to the actual contact log (depending on how p2p is implemented)
+        with open("./z5161616_contactlog.txt") as file:
+            contacts = file.readlines()
+            # Read in all the contacts
+            contacts = [i.strip().split(" ") for i in contacts]
+            for i in contacts:
+                print(f"{i[0]}, {i[1]} {i[2]}, {i[3]} {i[4]};")
+
+            local_payload["payload"] = contacts
+
+    print(local_payload)
+    clientSocket.send(dumps(local_payload).encode('utf-8'))
+
 
 
 clientSocket.close()

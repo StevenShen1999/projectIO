@@ -4,87 +4,123 @@
 #coding: utf-8
 from socket import *
 import threading
+from _thread import start_new_thread
 import time
 import datetime as dt
 
 from socket import *
 from json import loads, dumps
-#using the socket module
+from random import choices
+from string import ascii_lowercase, ascii_uppercase, digits
+
+unsuccessful_logins = {}
+logins = {}
+file_lock = threading.Lock()
+
+# Load in the credentials.txt file
+with open("./credentials.txt", "r") as file:
+    for i in file.readlines():
+        i = i.strip().split(" ")
+        logins[i[0]] = i[1]
+
+def threaded_client(connectionSocket):
+    local_user = None
+    global unsuccessful_logins
+    global logins
+    while True:
+        sentence = connectionSocket.recv(1024)
+
+        sentence = loads(sentence)
+        print(sentence)
+
+        message = ""
+        payload = None
+        if (sentence['operation'] == 'login'):
+            # First check if the account is currently locked out
+            if (sentence['username'] in unsuccessful_logins):
+                if (not isinstance(unsuccessful_logins[sentence['username']], int)):
+                    if (unsuccessful_logins[sentence['username']] > dt.datetime.now()):
+                        message = "blocked_1"
+                        break
+                    else:
+                        # This occurrs when the blacklist time has expired
+                        # Thus allow login to recommence
+                        unsuccessful_logins.pop(sentence['username'])
+
+            if (sentence['username'] not in logins):
+                message = ""
+            else:
+                if (sentence['password'] == logins[sentence['username']]):
+                    message = "logged_in"
+                    local_user = sentence['username']
+                else:
+                    if (sentence['username'] in unsuccessful_logins):
+                        unsuccessful_logins[sentence['username']] += 1
+                        if (unsuccessful_logins[sentence['username']] == 3):
+                            # TODO: Change this to block_time once we integrate the commandline
+                            unsuccessful_logins[sentence['username']] = dt.datetime.now() + dt.timedelta(seconds=30)
+                            message = "blocked_0"
+                            break
+                    else:
+                        unsuccessful_logins[sentence['username']] = 1
+                    message = "incorrect"
+        elif (sentence['operation'] == 'logout'):
+            message = "logged_out"
+            break
+        elif (sentence['operation'] == 'Download_tempID'):
+            file_lock.acquire()
+            temp_id = ''.join(choices(ascii_lowercase+ascii_uppercase+digits, k=20))
+            current_time = dt.datetime.now()
+            current_time -= dt.timedelta(microseconds=current_time.microsecond())
+            expiry_time = dt.datetime.now() + dt.timedelta(minutes=15)
+            expiry_time -= dt.timedelta(microseconds=expiry_time.microsecond())
+            with open("./tempIDs.txt", "a") as file:
+                file.writelines(f"{local_user} {temp_id} {current_time.date()} {current_time.time()} {expiry_time.date()} {expiry_time.time()}\n")
+            file_lock.release()
+            message = "success"
+            payload = {"id": temp_id}
+        elif (sentence['operation'] == 'Upload_contact_log'):
+            # TODO: Do operations on the input
+            print(f"received contact log from {local_user}")
+            for i in sentence['payload']:
+                print(f"{i[0]}, {i[1]} {i[2]}, {i[3]} {i[4]};")
+            message = "success"
+
+        if (not payload):
+            connectionSocket.send(dumps({"status": message}).encode('utf-8'))
+        else:
+            payload["status"] = message
+            connectionSocket.send(dumps(payload).encode('utf-8'))
+        
+
+    # This gets reached either by error states (i.e. locked out by three incomplete passwords, lock out time not reached)
+    connectionSocket.send(dumps({"status": message}).encode('utf-8'))
+    connectionSocket.close()
+
+        
 
 #Define connection (socket) parameters
 #Address + Port no
 #Server would be running on the same host as Client
 # change this port number if required
 
-# TODO: Change this to dynamic
-serverPort = 12040
+def main():
+    # TODO: Change this to dynamic
+    serverPort = 12000
 
-serverSocket = socket(AF_INET, SOCK_STREAM)
+    serverSocket = socket(AF_INET, SOCK_STREAM)
 
-serverSocket.bind(('localhost', serverPort))
+    serverSocket.bind(('localhost', serverPort))
 
-serverSocket.listen(1)
+    serverSocket.listen(1)
 
-print("The server is ready to receive")
+    print("The server is ready to receive")
 
-unsuccessful_logins = {}
-logins = {}
-with open("./credentials.txt", "r") as file:
-    for i in file.readlines():
-        i = i.strip().split(" ")
-        logins[i[0]] = i[1]
-
-
-while 1:
-    try:
+    while 1:
         connectionSocket, addr = serverSocket.accept()
+        start_new_thread(threaded_client, (connectionSocket,))
 
-        while 1:
-            sentence = connectionSocket.recv(1024)
-            sentence = loads(sentence)
-            print(sentence)
+    serverSocket.close()
 
-            message = ""
-            if (sentence['operation'] == 'login'):
-                # First check if the account is currently locked out
-                if (sentence['username'] in unsuccessful_logins):
-                    print("Entered this bit")
-                    if (not isinstance(unsuccessful_logins[sentence['username']], int)):
-                        print("Entered here as well")
-                        if (unsuccessful_logins[sentence['username']] > dt.datetime.now()):
-                            message = "blocked_1"
-                            break
-
-                if (sentence['username'] not in logins):
-                    message = ""
-                else:
-                    if (sentence['password'] == logins[sentence['username']]):
-                        message = "logged_in"
-                        # TODO: Remove this line when further features are implemented
-                        # This currently crashes the server
-                        break
-                    else:
-                        # TODO: Add a tally to this user's unsuccessful logins
-                        # If it is three times lock
-                        if (sentence['username'] in unsuccessful_logins):
-                            unsuccessful_logins[sentence['username']] += 1
-                            if (unsuccessful_logins[sentence['username']] == 3):
-                                # TODO: Change this to block_time once we integrate the commandline
-                                unsuccessful_logins[sentence['username']] = dt.datetime.now() + dt.timedelta(seconds=30)
-                                message = "blocked_0"
-                                break
-                        else:
-                            unsuccessful_logins[sentence['username']] = 1
-                        message = "incorrect"
-            elif (sentence['operation'] == 'logout'):
-                break
-
-            print(message)
-            connectionSocket.send(dumps({"status": message}).encode('utf-8'))
-
-        connectionSocket.send(dumps({"status": message}).encode('utf-8'))
-        connectionSocket.close()
-    except KeyboardInterrupt:
-        serverSocket.close()
-        print("Keyboard Interrupt: Server Closed")
-        break
+if __name__ == "__main__":
+    main()
