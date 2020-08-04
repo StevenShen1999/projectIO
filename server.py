@@ -71,19 +71,50 @@ def threaded_client(connectionSocket):
             file_lock.acquire()
             temp_id = ''.join(choices(ascii_lowercase+ascii_uppercase+digits, k=20))
             current_time = dt.datetime.now()
-            current_time -= dt.timedelta(microseconds=current_time.microsecond())
+            current_time = current_time.strftime("%d/%m/%Y %H:%M:%S")
             expiry_time = dt.datetime.now() + dt.timedelta(minutes=15)
-            expiry_time -= dt.timedelta(microseconds=expiry_time.microsecond())
+            expiry_time = expiry_time.strftime("%d/%m/%Y %H:%M:%S")
+
             with open("./tempIDs.txt", "a") as file:
-                file.writelines(f"{local_user} {temp_id} {current_time.date()} {current_time.time()} {expiry_time.date()} {expiry_time.time()}\n")
+                file.writelines(f"{local_user} {temp_id} {current_time} {expiry_time}\n")
             file_lock.release()
             message = "success"
             payload = {"id": temp_id}
         elif (sentence['operation'] == 'Upload_contact_log'):
-            # TODO: Do operations on the input
+            # FIXME: Have a got the contacts_to_check and tempIDs the other way around?
+
+            # Retrieve the contact log
+            contacts_to_check = {}
             print(f"received contact log from {local_user}")
             for i in sentence['payload']:
                 print(f"{i[0]}, {i[1]} {i[2]}, {i[3]} {i[4]};")
+                contacts_to_check[i[0]] = {}
+                print(i[1] + " " + i[2])
+                contacts_to_check[i[0]]['start'] = dt.datetime.strptime(i[1] + " " + i[2], "%d/%m/%Y %H:%M:%S")
+                contacts_to_check[i[0]]['end'] = dt.datetime.strptime(i[3] + " " + i[4], "%d/%m/%Y %H:%M:%S")
+
+            # Trace
+            print("Contact log checking")
+
+            # First get a list of all the tempIDs
+            file_lock.acquire()
+            with open("./tempIDs.txt", "r") as file:
+                tempIDs = file.readlines()
+                tempIDs = [i.strip().split(" ") for i in tempIDs]
+                for i in tempIDs:
+                    temp_id = i[1]
+                    time = dt.datetime.strptime(i[2] + " " + i[3], "%d/%m/%Y %H:%M:%S")
+
+                    # I don't know if we need to check the alternative (i.e. the temp_id in the contactlog is fake)
+                    if (temp_id in contacts_to_check):
+                        if (contacts_to_check[temp_id]['start'] <= time <= contacts_to_check[temp_id]['end']):
+                            print(f"{i[0]}, {contacts_to_check[temp_id]['start']};")
+
+            file_lock.release()
+
+            numbers = {}
+            for i in sentence['payload']:
+                print(i)
             message = "success"
 
         if (not payload):
@@ -106,7 +137,7 @@ def threaded_client(connectionSocket):
 
 def main():
     # TODO: Change this to dynamic
-    serverPort = 12000
+    serverPort = 12006
 
     serverSocket = socket(AF_INET, SOCK_STREAM)
 

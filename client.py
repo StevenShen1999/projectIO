@@ -39,6 +39,7 @@ while(1):
 
         local_payload = {"operation": "login", "username": username, "password": password}
         clientSocket.send(dumps(local_payload).encode('utf-8'))
+        continue
     elif (message['status'] == "blocked_0"):
         print("Invalid Password. Your account has been blocked. Please try again later")
         break
