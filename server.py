@@ -36,6 +36,7 @@ def threaded_client(connectionSocket):
         message = ""
         payload = None
         if (sentence['operation'] == 'login'):
+            print("Entered this bit")
             # First check if the account is currently locked out
             if (sentence['username'] in unsuccessful_logins):
                 if (not isinstance(unsuccessful_logins[sentence['username']], int)):
@@ -81,7 +82,7 @@ def threaded_client(connectionSocket):
             message = "success"
             payload = {"id": temp_id}
         elif (sentence['operation'] == 'Upload_contact_log'):
-            # FIXME: Have a got the contacts_to_check and tempIDs the other way around?
+            # FIXME: Have I got the contacts_to_check and tempIDs the other way around?
 
             # Retrieve the contact log
             contacts_to_check = {}
