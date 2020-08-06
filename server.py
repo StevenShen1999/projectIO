@@ -2,6 +2,7 @@
 #Python 3
 # Usage: python3 UDPserver3.py
 #coding: utf-8
+
 from socket import *
 import threading
 from _thread import start_new_thread
@@ -13,9 +14,15 @@ from json import loads, dumps
 from random import choices
 from string import ascii_lowercase, ascii_uppercase, digits
 
+import sys
+
+if len(sys.argv) != 3:
+    print("Usage: python3 server.py server_port block_duration")
+
 unsuccessful_logins = {}
 logins = {}
 file_lock = threading.Lock()
+block_duration = sys.argv[2]
 
 # Load in the credentials.txt file
 with open("./credentials.txt", "r") as file:
@@ -59,7 +66,7 @@ def threaded_client(connectionSocket):
                         unsuccessful_logins[sentence['username']] += 1
                         if (unsuccessful_logins[sentence['username']] == 3):
                             # TODO: Change this to block_time once we integrate the commandline
-                            unsuccessful_logins[sentence['username']] = dt.datetime.now() + dt.timedelta(seconds=30)
+                            unsuccessful_logins[sentence['username']] = dt.datetime.now() + dt.timedelta(seconds=block_duration)
                             message = "blocked_0"
                             break
                     else:
@@ -138,7 +145,7 @@ def threaded_client(connectionSocket):
 
 def main():
     # TODO: Change this to dynamic
-    serverPort = 12006
+    serverPort = int(sys.argv[1])
 
     serverSocket = socket(AF_INET, SOCK_STREAM)
 
